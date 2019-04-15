@@ -162,7 +162,7 @@ def download_multiple_files_after_searching_Api(drive_service,file_name, filepat
             raise Exception(f'{counter} Files Didnt get Downloaded ')
             os._exit(0)
 
-def upload_Folder_into_drive(drive_service,name):
+def create_Folder_into_drive(drive_service,name):
         file_metadata = {
             'name': name,
             'mimeType': 'application/vnd.google-apps.folder'
