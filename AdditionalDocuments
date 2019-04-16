@@ -1,1 +1,407 @@
+Test Google_Drive_Application:
 
+ 1. Test session
+ 2. Test redirect_session
+ 3. Test session transactions
+ 4. test session transaction needs cookies
+ 5. test reuse_client
+ 6. test client calls teardown handlers
+ 7. check your file isnt corrupted after download
+ 
+Example 1:	
+
+import os
+from subprocess import Popen, PIPE
+
+folderToCheck = '/Volumes/16TB/whatever/path'
+fileExtension = '.psb'
+
+def checkImage(fn):
+  proc = Popen(\['identify', '-verbose', fn\], stdout=PIPE, stderr=PIPE)
+  out, err = proc.communicate()
+  exitcode = proc.returncode
+  return exitcode, out, err
+
+for directory, subdirectories, files, in os.walk(folderToCheck):
+  for file in files:
+    if file.endswith(fileExtension):
+      filePath = os.path.join(directory, file)
+      code, output, error = checkImage(filePath)
+      if str(code) !="0" or str(error, "utf-8") != "":
+        print("ERROR " + filePath)
+      else:
+        print("OK " + filePath)
+
+print("-------------- DONE --------------");
+ 
+Example 2:
+     import pil
+
+	def option1(file):
+		parser = pil.ImageFileParser()
+		try:
+			while True:
+				data = file.read(1024)
+				if not data:
+					break
+				parser.feed(data)
+		     	image = parser.close()
+		except IOError as e:
+			print 'Bad image: %s' % e
+
+	def option2(path):
+		image = pil.Image.open(path)
+		try:
+			image.load()
+		except IOError as e:
+			print 'Bad image: %s' % e
+
+
+
+
+1. Broken Document validation at run time while upload or download
+
+2. When we try to Read and write the same file by multiple agents there might be chance of data inconsistancy we can use (GIL Global Interpreter lock ) to lock a resource  or use messaging queue/Topics
+
+
+   -- Need to test files consistancy by establsihing multiple users and perform read and write renadomly 
+
+3. Memory leaks can be tested we are opening up driver session multiple time and it got tirminated in between which is not garbage collected, will pile up unclosed sessions needs to be properly handeled
+
+
+4. In some case if we try download .png file as .pdf as data is into 	bytes we are writting, we would get corrupted file which can be validated
+
+
+	Test: need to have valid check for mimeType to .file extension which client is expecting and it has to display the end user with right formate of his file extension
+
+		Code to check corrupted data
+
+		sample given to check corrupted image file
+
+		import os
+		from subprocess import Popen, PIPE
+
+		folderToCheck = '/Volumes/16TB/whatever/path'
+		fileExtension = '.psb'
+
+		def checkImage(fn):
+		  proc = Popen(\['identify', '-verbose', fn\], stdout=PIPE, stderr=PIPE)
+		  out, err = proc.communicate()
+		  exitcode = proc.returncode
+		  return exitcode, out, err
+
+		for directory, subdirectories, files, in os.walk(folderToCheck):
+		  for file in files:
+			if file.endswith(fileExtension):
+			  filePath = os.path.join(directory, file)
+			  code, output, error = checkImage(filePath)
+			  if str(code) !="0" or str(error, "utf-8") != "":
+				print("ERROR " + filePath)
+			  else:
+				print("OK " + filePath)
+
+		print("-------------- DONE --------------");
+
+
+
+II. Account Specific 
+
+	1. What if the limit(No .of requests per day) given by vendor exhausted.
+
+		I. how do we prevent our client hitting there server and returning null Response:
+		1. By caching immutable data.
+		2. By sending or redirecting request to errorhandler server where client would be responded with relavent message (User Exceeded his limit of usage)
+		3. if user has crossed his limit of hits, then he has to be served from cached history only.
+		
+	2. caching services like getting files from drive will be immutable until some post / put/delete operations performed on server.
+		1. Need to establish a realtime communication like Websockets and store the updated details from drive api 
+		(or)
+		2. Run scheduler job at specific time get all data of run time and store it in cache only for the data that are not changing frequently
+	
+	   
+	
+	 3. Test Cache layer if it is getting updated on each change to the drive when requested by client
+
+	 4. a realtime Call has to be given to drive and check its pre-requisites if client is doing some updates to server resources and also should be cached
+	 
+	 5. Need to test different layers of caches based on kind of data user is expecting, and how well he is getting served from cache layer
+	 
+	 6. As hits increases, how well its able to serve from cache.
+
+ 
+
+  
+III. Network Fluctuations:
+
+1. If server is having fluctuating network how do we handle requests
+   1. need to perform rerun multiple times (Limted threshold) and if we don't get resonse still how do our application behaves (Need to throw custom Exception or cached response)  
+     reattempt 
+	 
+  
+	  
+	2. sore all requests into messaging queue and hit the cluster server at runtime and wait for its acknowledgement or response,
+	
+	
+	Code to test network fluctuation
+	
+		1 way: def __get_response(attempts=5):
+    url = __construct_gpl_url(accession)  # Not shown
+    response = None
+    while attempts > 0:
+        try:
+            response = urllib2.urlopen(url)
+            if response and response.getcode() < 201:
+                break
+            else:
+                attempts -= 1
+        except urllib2.URLError:
+            print 'URLError with: ' + url
+    return response.read()
+	
+	2 way: send the above task into rabbitmq and do a retry untill certain time limit wait for acknowldgement
+	
+3. when client downloads/uploads a file and becoz of network break down/power the requests which didnt complete its execution should be rolled back and has to notify user that request has to be rolled out with relevant error message to user.
+	
+1. Provide an option to proceed with his request, once server is up on users acknowldgement his request will be stored into redis server with a key 
+once server is up we need to push requests into messaging queue and proceed further and acknowledge user.
+	
+	
+	
+	
+	
+	
+IV. Limited Access to resources	
+	 
+1. When you have limited upload/ Download 
+   1. first check we need to check whether our file to download or upload are with in limit 
+   2. if we get multiple request from user which are with in limit but all together will cross our threshold level 
+   Eg:
+    our limit to upload/download a file per day is 200mb
+	
+	I have 3 users requested to download/upload a file of 70mb 
+	Means 210mb which is out of limit
+	
+	so how well we are handling client requests using rabbitmq which takes requests as store into and served client in FIFO manner
+	
+	so each request before server need to Thrown with relevent response to client about his request
+	
+6. Serving cached shared files accross multiple users	
+
+	1. If file is shared accross multiple drives those files can be cached from our end and can be served to user from appliction
+	
+	2. Serving some frequently accessed files by the particular user directly from application 
+	
+	
+	
+	
+V. Health of application
+
+	1. set a threshold level for cpu and ram usage once you cross that limit you should be creating new instance of a system.
+	
+	
+	code to test runtime cpu and ram usage
+	
+
+
+
+import win32com.client
+from ctypes import *
+from ctypes.wintypes import *
+import pythoncom
+import pywintypes
+import datetime
+
+__revision__ = 3
+class MEMORYSTATUS(Structure):
+    _fields_ = [
+                ('dwLength', DWORD),
+                ('dwMemoryLoad', DWORD),
+                ('dwTotalPhys', DWORD),
+                ('dwAvailPhys', DWORD),
+                ('dwTotalPageFile', DWORD),
+                ('dwAvailPageFile', DWORD),
+                ('dwTotalVirtual', DWORD),
+                ('dwAvailVirtual', DWORD),
+                ]
+
+
+def winmem():
+    x = MEMORYSTATUS() # create the structure
+    windll.kernel32.GlobalMemoryStatus(byref(x)) # from cytypes.wintypes
+    return x
+
+
+class process_stats:
+    '''process_stats is able to provide counters of (all?) the items available in perfmon.
+    Refer to the self.supported_types keys for the currently supported 'Performance Objects'
+
+    To add logging support for other data you can derive the necessary data from perfmon:
+    ---------
+    perfmon can be run from windows 'run' menu by entering 'perfmon' and enter.
+    Clicking on the '+' will open the 'add counters' menu,
+    From the 'Add Counters' dialog, the 'Performance object' is the self.support_types key.
+    --> Where spaces are removed and symbols are entered as text (Ex. # == Number, % == Percent)
+    For the items you wish to log add the proper attribute name in the list in the self.supported_types dictionary,
+    keyed by the 'Performance Object' name as mentioned above.
+    ---------
+
+    NOTE: The 'NETFramework_NETCLRMemory' key does not seem to log dotnet 2.0 properly.
+
+    Initially the python implementation was derived from:
+    http://www.microsoft.com/technet/scriptcenter/scripts/default.mspx?mfr=true
+    '''
+    def __init__(self,process_name_list=[],perf_object_list=[],filter_list=[]):
+        '''process_names_list == the list of all processes to log (if empty log all)
+        perf_object_list == list of process counters to log
+        filter_list == list of text to filter
+        print_results == boolean, output to stdout
+        '''
+        pythoncom.CoInitialize() # Needed when run by the same process in a thread
+
+        self.process_name_list = process_name_list
+        self.perf_object_list = perf_object_list
+        self.filter_list = filter_list
+
+        self.win32_perf_base = 'Win32_PerfFormattedData_'
+
+        # Define new datatypes here!
+        self.supported_types = {
+                                    'NETFramework_NETCLRMemory':    [
+                                                                        'Name',
+                                                                        'NumberTotalCommittedBytes',
+                                                                        'NumberTotalReservedBytes',
+                                                                        'NumberInducedGC',
+                                                                        'NumberGen0Collections',
+                                                                        'NumberGen1Collections',
+                                                                        'NumberGen2Collections',
+                                                                        'PromotedMemoryFromGen0',
+                                                                        'PromotedMemoryFromGen1',
+                                                                        'PercentTimeInGC',
+                                                                        'LargeObjectHeapSize'
+                                                                     ],
+
+                                    'PerfProc_Process':              [
+                                                                          'Name',
+                                                                          'PrivateBytes',
+                                                                          'ElapsedTime',
+                                                                          'IDProcess',# pid
+                                                                          'Caption',
+                                                                          'CreatingProcessID',
+                                                                          'Description',
+                                                                          'IODataBytesPersec',
+                                                                          'IODataOperationsPersec',
+                                                                          'IOOtherBytesPersec',
+                                                                          'IOOtherOperationsPersec',
+                                                                          'IOReadBytesPersec',
+                                                                          'IOReadOperationsPersec',
+                                                                          'IOWriteBytesPersec',
+                                                                          'IOWriteOperationsPersec'
+                                                                      ]
+                                }
+
+    def get_pid_stats(self, pid):
+        this_proc_dict = {}
+
+        pythoncom.CoInitialize() # Needed when run by the same process in a thread
+        if not self.perf_object_list:
+            perf_object_list = self.supported_types.keys()
+
+        for counter_type in perf_object_list:
+            strComputer = "."
+            objWMIService = win32com.client.Dispatch("WbemScripting.SWbemLocator")
+            objSWbemServices = objWMIService.ConnectServer(strComputer,"root\cimv2")
+
+            query_str = '''Select * from %s%s''' % (self.win32_perf_base,counter_type)
+            colItems = objSWbemServices.ExecQuery(query_str) # "Select * from Win32_PerfFormattedData_PerfProc_Process")# changed from Win32_Thread
+
+            if len(colItems) > 0:
+                for objItem in colItems:
+                    if hasattr(objItem, 'IDProcess') and pid == objItem.IDProcess:
+
+                            for attribute in self.supported_types[counter_type]:
+                                eval_str = 'objItem.%s' % (attribute)
+                                this_proc_dict[attribute] = eval(eval_str)
+
+                            this_proc_dict['TimeStamp'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.') + str(datetime.datetime.now().microsecond)[:3]
+                            break
+
+        return this_proc_dict
+
+
+    def get_stats(self):
+        '''
+        Show process stats for all processes in given list, if none given return all processes
+        If filter list is defined return only the items that match or contained in the list
+        Returns a list of result dictionaries
+        '''
+        pythoncom.CoInitialize() # Needed when run by the same process in a thread
+        proc_results_list = []
+        if not self.perf_object_list:
+            perf_object_list = self.supported_types.keys()
+
+        for counter_type in perf_object_list:
+            strComputer = "."
+            objWMIService = win32com.client.Dispatch("WbemScripting.SWbemLocator")
+            objSWbemServices = objWMIService.ConnectServer(strComputer,"root\cimv2")
+
+            query_str = '''Select * from %s%s''' % (self.win32_perf_base,counter_type)
+            colItems = objSWbemServices.ExecQuery(query_str) # "Select * from Win32_PerfFormattedData_PerfProc_Process")# changed from Win32_Thread
+
+            try:
+                if len(colItems) > 0:
+                    for objItem in colItems:
+                        found_flag = False
+                        this_proc_dict = {}
+
+                        if not self.process_name_list:
+                            found_flag = True
+                        else:
+                            # Check if process name is in the process name list, allow print if it is
+                            for proc_name in self.process_name_list:
+                                obj_name = objItem.Name
+                                if proc_name.lower() in obj_name.lower(): # will log if contains name
+                                    found_flag = True
+                                    break
+
+                        if found_flag:
+                            for attribute in self.supported_types[counter_type]:
+                                eval_str = 'objItem.%s' % (attribute)
+                                this_proc_dict[attribute] = eval(eval_str)
+
+                            this_proc_dict['TimeStamp'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.') + str(datetime.datetime.now().microsecond)[:3]
+                            proc_results_list.append(this_proc_dict)
+
+            except pywintypes.com_error as err_msg:
+                # Ignore and continue (proc_mem_logger calls this function once per second)
+                continue
+        return proc_results_list
+
+
+def get_sys_stats():
+    ''' Returns a dictionary of the system stats'''
+    pythoncom.CoInitialize() # Needed when run by the same process in a thread
+    x = winmem()
+
+    sys_dict = {
+                    'dwAvailPhys': x.dwAvailPhys,
+                    'dwAvailVirtual':x.dwAvailVirtual
+                }
+    return sys_dict
+
+
+if __name__ == '__main__':
+    # This area used for testing only
+    sys_dict = get_sys_stats()
+
+    stats_processor = process_stats(process_name_list=['process2watch'],perf_object_list=[],filter_list=[])
+    proc_results = stats_processor.get_stats()
+
+    for result_dict in proc_results:
+        print(result_dict)
+
+    import os
+    this_pid = os.getpid()
+    this_proc_results = stats_processor.get_pid_stats(this_pid)
+
+    print ('this proc results:')
+    print (this_proc_results)
